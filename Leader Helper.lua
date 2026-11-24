@@ -8,7 +8,7 @@ local encoding = require 'encoding'
 local lfs = require 'lfs'
 local sampev = require 'samp.events'
 
-local SCRIPT_VERSION = "0.4.3"
+local SCRIPT_VERSION = "0.4.6"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
 
 local updateAvailable    = ffi.new('bool[1]', false)
@@ -675,6 +675,13 @@ local bufExportStr       = ffi.new('char[8192]')
 local bufImportStr       = ffi.new('char[8192]')
 local checkTime          = ffi.new('bool[1]', false)
 local checkScreenshot    = ffi.new('bool[1]', false)
+local screenshotMenuOpen = ffi.new('bool[1]', false)
+local screenshotMenuFolder = "Собеседование"
+local screenshotMenuTakeShot = true
+local screenshotMenuSendTime = true
+local bufNewFolderName = ffi.new('char[128]')
+local folderList = {}
+local folderScroll = 0
 
 local myFont = nil
 
@@ -919,6 +926,111 @@ local function getDocumentsPath()
     local homePath = os.getenv("HOMEPATH")
     if homeDrive and homePath then return homeDrive .. homePath .. "\\Documents" end
     return nil
+end
+
+local function getScreensBasePath()
+    local docs = getDocumentsPath()
+    if not docs then return nil end
+    local base = docs .. "\\GTA San Andreas User Files\\SAMP\\arizona\\screens"
+    if not lfs.attributes(base) then
+        base = docs .. "\\GTA San Andreas User Files\\SAMP\\screens"
+    end
+    if not lfs.attributes(base) then return nil end
+    return base
+end
+
+local function refreshFolderList()
+    folderList = {}
+    local base = getScreensBasePath()
+    if not base then return end
+
+    -- стандартные папки профилей
+    for i = 1, cfg.profiles.count do
+        local p = getProfile(i)
+        local f = p.screenshotFolder
+        if f and f ~= "" then
+            local exists = false
+            for _, v in ipairs(folderList) do
+                if v == f then exists = true; break end
+            end
+            if not exists then folderList[#folderList + 1] = f end
+        end
+    end
+
+    -- папки, уже существующие на диске
+    local seen = {}
+    for _, v in ipairs(folderList) do seen[v] = true end
+
+    local ok, entries = pcall(function()
+        local r = {}
+        for entry in lfs.dir(base) do
+            if entry ~= "." and entry ~= ".." then
+                local attr = lfs.attributes(base .. "\\" .. entry)
+                if attr and attr.mode == "directory" then
+                    r[#r + 1] = ansiToUtf8(entry)
+                end
+            end
+        end
+        table.sort(r)
+        return r
+    end)
+
+    if ok then
+        for _, name in ipairs(entries) do
+            if not seen[name] then
+                seen[name] = true
+                folderList[#folderList + 1] = name
+            end
+        end
+    end
+
+    -- если пусто — добавим дефолт
+    if #folderList == 0 then
+        folderList[1] = "Собеседование"
+    end
+end
+
+local function createScreenshotFolder(nameUtf8)
+    nameUtf8 = sanitizeFolderName(nameUtf8)
+    local base = getScreensBasePath()
+    if not base then notify("error", "Не найдена папка screens"); return false end
+
+    local nameAnsi = utf8ToAnsi(nameUtf8)
+    local targetAnsi = base .. "\\" .. nameAnsi
+    ensureDirectory(targetAnsi)
+
+    if lfs.attributes(targetAnsi) then
+        notify("success", "Папка создана: " .. nameUtf8)
+        refreshFolderList()
+        return true
+    else
+        notify("error", "Не удалось создать папку")
+        return false
+    end
+end
+
+local function doScreenshotAction()
+    if not screenshotMenuTakeShot and not screenshotMenuSendTime then
+        notify("error", "Выбери хотя бы одно действие (/time или скриншот)")
+        return
+    end
+
+    local folder = screenshotMenuFolder
+    local sendTime = screenshotMenuSendTime
+    local takeShot = screenshotMenuTakeShot
+
+    screenshotMenuOpen[0] = false
+
+    lua_thread.create(function()
+        if sendTime then
+            sampSendChat("/time")
+            wait(500)
+        end
+        if takeShot then
+            takeScreenshot(folder)
+        end
+        notify("success", "Готово: " .. folder)
+    end)
 end
 
 local function ensureDirectory(pathAnsi)
@@ -1623,6 +1735,93 @@ local function radialButton(label, x, y, width, height)
     return imgui.Button(label, imgui.ImVec2(width, height))
 end
 
+local function drawScreenshotMenu()
+    local sw, sh = getScreenResolution()
+
+    imgui.SetNextWindowSize(imgui.ImVec2(560, 640), imgui.Cond.Always)
+    imgui.SetNextWindowPos(
+        imgui.ImVec2(sw / 2, sh / 2),
+        imgui.Cond.Always,
+        imgui.ImVec2(0.5, 0.5)
+    )
+
+    local flags =
+        imgui.WindowFlags.NoTitleBar +
+        imgui.WindowFlags.NoResize +
+        imgui.WindowFlags.NoMove +
+        imgui.WindowFlags.NoCollapse
+
+    imgui.Begin("##ScreenshotMenu", screenshotMenuOpen, flags)
+
+    -- градиентная полоса сверху
+    local dl = imgui.GetWindowDrawList()
+    local wp = imgui.GetWindowPos()
+    local ws = imgui.GetWindowSize()
+    local t = os.clock()
+    local hue = 0.65 + 0.08 * math.sin(t * 0.5)
+    local r, g, b = hsvRgb(hue, 0.6, 0.95)
+    dl:AddRectFilledMultiColor(
+        imgui.ImVec2(wp.x, wp.y),
+        imgui.ImVec2(wp.x + ws.x, wp.y + 4),
+        rgba(r, g, b, 0.95), rgba(r, g, b, 0.5),
+        rgba(r, g, b, 0.15), rgba(r, g, b, 0.4)
+    )
+
+    imgui.SetCursorPos(imgui.ImVec2(20, 18))
+    imgui.TextColored(imgui.ImVec4(0.6, 0.85, 1.0, 1.0), "СКРИНШОТ + /TIME")
+
+    -- выбор папки
+    imgui.SetCursorPos(imgui.ImVec2(20, 55))
+    imgui.Text("Папка для сохранения:")
+
+    imgui.SetCursorPos(imgui.ImVec2(20, 78))
+    imgui.BeginChild("##folders", imgui.ImVec2(520, 220), true)
+    for i, name in ipairs(folderList) do
+        local sel = (name == screenshotMenuFolder)
+        if imgui.Selectable(name .. "##f" .. i, sel) then
+            screenshotMenuFolder = name
+        end
+    end
+    imgui.EndChild()
+
+    -- создание новой папки
+    imgui.SetCursorPos(imgui.ImVec2(20, 312))
+    imgui.Text("Создать папку:")
+    imgui.SetCursorPos(imgui.ImVec2(20, 335))
+    imgui.SetNextItemWidth(330)
+    imgui.InputText("##newfolder", bufNewFolderName, 128)
+    imgui.SameLine()
+    if accBtn("СОЗДАТЬ", imgui.ImVec2(160, 30), 2) then
+        local n = trim(ffi.string(bufNewFolderName))
+        if n ~= "" then
+            if createScreenshotFolder(n) then
+                screenshotMenuFolder = sanitizeFolderName(n)
+                ffi.fill(bufNewFolderName, ffi.sizeof(bufNewFolderName))
+            end
+        end
+    end
+
+    -- опции
+    imgui.SetCursorPos(imgui.ImVec2(20, 385))
+    imgui.Checkbox("Отправить /time", ffi.new('bool[1]', screenshotMenuSendTime))
+    -- ↑ ffi.new нельзя использовать каждый кадр — используй отдельный bool-буфер
+    imgui.SameLine()
+    imgui.Checkbox("Сделать скриншот", ffi.new('bool[1]', screenshotMenuTakeShot))
+    -- ↑ аналогично
+
+    -- кнопки
+    imgui.SetCursorPos(imgui.ImVec2(20, 540))
+    if accBtn("ВЫПОЛНИТЬ", imgui.ImVec2(250, 40), 0) then
+        doScreenshotAction()
+    end
+    imgui.SameLine()
+    if grayBtn("ОТМЕНА", imgui.ImVec2(250, 40)) then
+        screenshotMenuOpen[0] = false
+    end
+
+    imgui.End()
+end
+
 local function drawRadialMenu()
     local sw, sh = getScreenResolution()
 
@@ -1811,11 +2010,14 @@ end
 
 imgui.OnFrame(
     function()
-        return showMenu[0] or radialOpen[0] or updateAvailable[0]
+        return showMenu[0] or radialOpen[0] or updateAvailable[0] or screenshotMenuOpen[0]
     end,
     function()
         if updateAvailable[0] then
             drawUpdateWindow()
+        end
+        if screenshotMenuOpen[0] then
+            drawScreenshotMenu()
         end
         if radialOpen[0] then
             drawRadialMenu()
@@ -1852,6 +2054,26 @@ function main()
         end
 
         showMenu[0] = not showMenu[0]
+    end)
+
+    sampRegisterChatCommand("scr", function()
+        if sequenceRunning or screenshotInProgress then
+            notify("error", "Дождись завершения текущего действия")
+            return
+        end
+    
+        refreshFolderList()
+    
+        -- по умолчанию — папка текущего профиля
+        screenshotMenuFolder = activeCfg.screenshotFolder or "Собеседование"
+    
+        checkScrTime[0] = true
+        checkScrShot[0] = true
+        ffi.fill(bufNewFolderName, ffi.sizeof(bufNewFolderName))
+    
+        showMenu[0] = false
+        if radialOpen[0] then closeRadial() end
+        screenshotMenuOpen[0] = true
     end)
 
     sampRegisterChatCommand("lh", function(param)
