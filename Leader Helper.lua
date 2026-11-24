@@ -8,7 +8,7 @@ local encoding = require 'encoding'
 local lfs = require 'lfs'
 local sampev = require 'samp.events'
 
-local SCRIPT_VERSION = "0.4.6"
+local SCRIPT_VERSION = "0.4.7"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
 
 local updateAvailable    = ffi.new('bool[1]', false)
@@ -675,12 +675,12 @@ local bufExportStr       = ffi.new('char[8192]')
 local bufImportStr       = ffi.new('char[8192]')
 local checkTime          = ffi.new('bool[1]', false)
 local checkScreenshot    = ffi.new('bool[1]', false)
-local screenshotMenuOpen = ffi.new('bool[1]', false)
+local screenshotMenuOpen   = ffi.new('bool[1]', false)
 local screenshotMenuFolder = "Собеседование"
-local screenshotMenuTakeShot = true
-local screenshotMenuSendTime = true
-local bufNewFolderName = ffi.new('char[128]')
-local folderList = {}
+local checkScrTime         = ffi.new('bool[1]', true)
+local checkScrShot         = ffi.new('bool[1]', true)
+local bufNewFolderName     = ffi.new('char[128]')
+local folderList           = {}
 local folderScroll = 0
 
 local myFont = nil
@@ -1803,10 +1803,10 @@ local function drawScreenshotMenu()
 
     -- опции
     imgui.SetCursorPos(imgui.ImVec2(20, 385))
-    imgui.Checkbox("Отправить /time", ffi.new('bool[1]', screenshotMenuSendTime))
+    imgui.Checkbox("Отправить /time", checkScrTime)
     -- ↑ ffi.new нельзя использовать каждый кадр — используй отдельный bool-буфер
     imgui.SameLine()
-    imgui.Checkbox("Сделать скриншот", ffi.new('bool[1]', screenshotMenuTakeShot))
+    imgui.Checkbox("Сделать скриншот", checkScrShot)
     -- ↑ аналогично
 
     -- кнопки
