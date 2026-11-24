@@ -11,7 +11,7 @@ local sampev = require 'samp.events'
 -- =========================================
 -- АВТООБНОВЛЕНИЕ
 -- =========================================
-local SCRIPT_VERSION = "0.5.1"
+local SCRIPT_VERSION = "0.5.0"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/main/Leader%20Helper.lua"
 
 local SCRIPT_PATH = thisScript().path
@@ -1825,6 +1825,38 @@ imgui.OnFrame(
 
 function main()
     repeat wait(0) until isSampAvailable()
+
+    lua_thread.create(function()
+        wait(2000)
+        local updated, ver = checkUpdate()
+        if updated then
+            sampAddChatMessage(
+                u8:decode("{6495ED}[Leader Helper] {00FF7F}Обновлено до версии " .. tostring(ver) .. ". Перезагружаю..."),
+                -1
+            )
+            wait(1000)
+            -- Пытаемся перезагрузить скрипт сами
+            local reloaded = false
+            if thisScript and thisScript().reload then
+                local ok, err = pcall(function()
+                    thisScript():reload()
+                end)
+                reloaded = ok
+            end
+            if not reloaded then
+                -- fallback: просим игрока
+                sampAddChatMessage(
+                    u8:decode("{FFD700}[Leader Helper] Напиши /mlreload чтобы применить обновление"),
+                    -1
+                )
+            end
+        elseif ver then
+            sampAddChatMessage(
+                u8:decode("{FF4444}[Leader Helper] Ошибка обновления: " .. tostring(ver)),
+                -1
+            )
+        end
+    end)
 
     sampRegisterChatCommand("ltools", function()
         if radialOpen[0] then
