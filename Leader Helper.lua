@@ -1830,7 +1830,7 @@ function main()
 
     if lastUpdateVersion then
         sampAddChatMessage(u8:decode("{6495ED}[Leader Helper] {00FF7F}Скрипт успешно обновлён до версии " .. lastUpdateVersion), -1)
-        lastUpdateVersion = nil -- Очищаем, чтобы при следующем перезаходе не спамило
+        lastUpdateVersion = nil
     else
         notify("success", "Скрипт запущен! /ltools — меню")
     end
