@@ -8,7 +8,7 @@ local encoding = require 'encoding'
 local lfs = require 'lfs'
 local sampev = require 'samp.events'
 
-local SCRIPT_VERSION = "0.7.1"
+local SCRIPT_VERSION = "0.7.4"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
 
 local updateAvailable    = ffi.new('bool[1]', false)
@@ -1254,41 +1254,20 @@ local function drawScrMenu()
     if not showScrMenu[0] then return end
 
     if myFont then imgui.PushFont(myFont) end
+    imgui.SetNextWindowSize(imgui.ImVec2(600, 780), imgui.Cond.Always)
+    imgui.Begin("Быстрый скриншот", showScrMenu, imgui.WindowFlags.NoResize)
 
-    local sw, sh = getScreenResolution()
-    imgui.SetNextWindowSize(imgui.ImVec2(480, 400), imgui.Cond.Always)
-    imgui.SetNextWindowPos(
-        imgui.ImVec2(sw / 2, sh / 2),
-        imgui.Cond.Always,
-        imgui.ImVec2(0.5, 0.5)
-    )
-
-    local flags = imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoMove
-    imgui.Begin("##ScrWindow", showScrMenu, flags)
-
-    -- Красивый фон
-    local dl = imgui.GetWindowDrawList()
-    local wp = imgui.GetWindowPos()
-    local ws = imgui.GetWindowSize()
-    dl:AddRectFilledMultiColor(
-        imgui.ImVec2(wp.x, wp.y), imgui.ImVec2(wp.x + ws.x, wp.y + 4),
-        rgba(0.2, 0.7, 0.4, 0.95), rgba(0.3, 0.9, 0.5, 0.95), rgba(0.3, 0.9, 0.5, 0.35), rgba(0.2, 0.7, 0.4, 0.35)
-    )
-    dl:AddRect(imgui.ImVec2(wp.x + 1, wp.y + 1), imgui.ImVec2(wp.x + ws.x - 1, wp.y + ws.y - 1), rgba(0.2, 0.7, 0.4, 0.85), 12.0)
-
-    imgui.SetCursorPos(imgui.ImVec2(20, 18))
-    imgui.TextColored(imgui.ImVec4(0.4, 1.0, 0.6, 1.0), "БЫСТРЫЙ СКРИНШОТ")
-
-    imgui.SetCursorPos(imgui.ImVec2(440, 15))
-    if imgui.Button("X", imgui.ImVec2(25, 25)) then
-        showScrMenu[0] = false
-    end
-
-    imgui.SetCursorPos(imgui.ImVec2(20, 60))
-    imgui.Text("Выберите папку для сохранения:")
+    drawAnimBg()
     
-    imgui.SetCursorPos(imgui.ImVec2(20, 85))
-    imgui.BeginChild("##folders_list", imgui.ImVec2(440, 150), true)
+    -- Заголовок в стиле основного меню
+    secTitle("БЫСТРЫЙ СКРИНШОТ")
+    gradSep()
+
+    imgui.Text("Выберите папку для сохранения скриншота:")
+    imgui.Spacing()
+
+    -- Список папок (в виде красивого списка)
+    imgui.BeginChild("##scr_folders", imgui.ImVec2(540, 300), true)
     for i, folder in ipairs(scrFolders) do
         local isSelected = (scrSelectedIdx == i)
         if imgui.Selectable(folder, isSelected) then
@@ -1296,18 +1275,19 @@ local function drawScrMenu()
         end
     end
     imgui.EndChild()
-
-    imgui.SetCursorPos(imgui.ImVec2(20, 250))
-    imgui.Text("Создать новую папку:")
-    imgui.SetCursorPos(imgui.ImVec2(20, 275))
-    imgui.SetNextItemWidth(290)
-    imgui.InputText("##newfolder", bufNewFolder, ffi.sizeof(bufNewFolder))
     
+    gradSep()
+
+    -- Создание новой папки
+    secTitle("СОЗДАТЬ НОВУЮ ПАПКУ")
+    imgui.Text("Название папки:")
+    imgui.PushItemWidth(380)
+    imgui.InputText("##newfolder", bufNewFolder, ffi.sizeof(bufNewFolder))
+    imgui.PopItemWidth()
     imgui.SameLine()
-    if imgui.Button("ДОБАВИТЬ", imgui.ImVec2(140, 25)) then
+    if accBtn("ДОБАВИТЬ", imgui.ImVec2(150, 32), 0) then
         local newName = trim(ffi.string(bufNewFolder))
         if newName ~= "" then
-            -- Проверяем, нет ли уже такой
             local exists = false
             for _, f in ipairs(scrFolders) do
                 if f == newName then exists = true; break end
@@ -1322,6 +1302,24 @@ local function drawScrMenu()
             end
         end
     end
+
+    gradSep()
+
+    -- Главная кнопка действия
+    if accBtn("СДЕЛАТЬ СКРИНШОТ И /time", imgui.ImVec2(540, 45), 1) then
+        showScrMenu[0] = false
+        local targetFolder = scrFolders[scrSelectedIdx]
+        
+        lua_thread.create(function()
+            sampSendChat("/time")
+            wait(500)
+            takeScreenshot(targetFolder)
+        end)
+    end
+
+    imgui.End()
+    if myFont then imgui.PopFont() end
+end
 
     imgui.SetCursorPos(imgui.ImVec2(20, 335))
     imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.1, 0.5, 0.2, 0.9))
