@@ -8,11 +8,15 @@ local encoding = require 'encoding'
 local lfs = require 'lfs'
 local sampev = require 'samp.events'
 
-local SCRIPT_VERSION = "0.4.0"
+local SCRIPT_VERSION = "0.4.1"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
+
 local updateAvailable    = ffi.new('bool[1]', false)
 local updateRemoteVer    = ""
 local updateContent      = ""
+
+lastUpdateVersion = nil 
+
 encoding.default = 'CP1251'
 local u8 = encoding.UTF8
 
@@ -96,14 +100,11 @@ local function applyUpdate()
     end
 
     if ok then
-        -- Записываем в память (INI), что мы обновились
-        cfg.justUpdated = updateRemoteVer
-        ini.save(cfg, CONFIG_FILE)
-
+        lastUpdateVersion = updateRemoteVer -- Сохраняем версию в память
+        
         sampAddChatMessage(u8:decode("{6495ED}[Leader Helper] {00FF7F}Обновлено до версии " .. updateRemoteVer .. "!"), -1)
         wait(1000) 
         
-        -- Перезагружаемся
         thisScript():reload()
     else
         sampAddChatMessage(u8:decode("{FF4444}[Leader Helper] Не удалось заменить файл скрипта"), -1)
@@ -1827,6 +1828,13 @@ imgui.OnFrame(
 function main()
     repeat wait(0) until isSampAvailable()
 
+    if lastUpdateVersion then
+        sampAddChatMessage(u8:decode("{6495ED}[Leader Helper] {00FF7F}Скрипт успешно обновлён до версии " .. lastUpdateVersion), -1)
+        lastUpdateVersion = nil -- Очищаем, чтобы при следующем перезаходе не спамило
+    else
+        notify("success", "Скрипт запущен! /ltools — меню")
+    end
+    
     lua_thread.create(function()
         wait(2000)
         local updated, ver = checkUpdate()
@@ -1846,16 +1854,7 @@ function main()
         showMenu[0] = not showMenu[0]
     end)
 
-    notify("success", "Скрипт запущен! /ltools — меню")
-    if cfg.justUpdated then
-        sampAddChatMessage(u8:decode("{6495ED}[Leader Helper] {00FF7F}Скрипт успешно обновлён до версии " .. cfg.justUpdated), -1)
-        cfg.justUpdated = nil
-        ini.save(cfg, CONFIG_FILE)
-    else
-        notify("success", "Скрипт запущен! /ltools — меню")
-    end
-
-        sampRegisterChatCommand("lh", function(param)
+    sampRegisterChatCommand("lh", function(param)
         local id = tonumber(trim(param or ""))
 
         if not id or id < 0 or id > 1000 or id ~= math.floor(id) then
