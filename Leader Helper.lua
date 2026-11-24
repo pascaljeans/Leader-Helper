@@ -11,7 +11,7 @@ local sampev = require 'samp.events'
 -- =========================================
 -- АВТООБНОВЛЕНИЕ
 -- =========================================
-local SCRIPT_VERSION = "0.5.0"
+local SCRIPT_VERSION = "0.5.1"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/leader-helper/main/Leader%20Helper.lua"
 
 local SCRIPT_PATH = thisScript().path
