@@ -1668,7 +1668,7 @@ local function drawUpdateWindow()
 
     -- Описание
     imgui.SetCursorPos(imgui.ImVec2(20, 115))
-    imgui.TextWrapped("Обновить скрипт сейчас? После обновления нужно написать /mlreload.")
+    imgui.TextWrapped("Обновить скрипт сейчас?")
 
     -- Кнопки
     imgui.SetCursorPos(imgui.ImVec2(20, 200))
