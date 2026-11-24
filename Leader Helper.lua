@@ -8,10 +8,7 @@ local encoding = require 'encoding'
 local lfs = require 'lfs'
 local sampev = require 'samp.events'
 
--- =========================================
--- АВТООБНОВЛЕНИЕ
--- =========================================
-local SCRIPT_VERSION = "0.3.5"
+local SCRIPT_VERSION = "0.3.8"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
 local updateAvailable    = ffi.new('bool[1]', false)
 local updateRemoteVer    = ""
@@ -84,27 +81,42 @@ local function checkUpdate()
 end
 
 local function applyUpdate()
-    if not updateContent or #updateContent < 100 then
-        sampAddChatMessage(u8:decode("{FF4444}[Leader Helper] Нет данных для обновления"), -1)
-        return
+    if not updateContent or #updateContent < 100 then 
+        return 
     end
+
+    updateAvailable[0] = false
 
     os.remove(SCRIPT_PATH)
     local ok = os.rename(TEMP_SCRIPT, SCRIPT_PATH)
     if not ok then
         local f = io.open(SCRIPT_PATH, "w")
-        if f then f:write(updateContent); f:close(); ok = true end
+        if f then 
+            f:write(updateContent)
+            f:close()
+            ok = true 
+        end
         if ok then os.remove(TEMP_SCRIPT) end
     end
 
     if ok then
-        updateAvailable[0] = false
         sampAddChatMessage(
-            u8:decode("{6495ED}[Leader Helper] {00FF7F}Обновлено до " .. updateRemoteVer .. ". Напиши /mlreload"),
+            u8:decode("{6495ED}[Leader Helper] {00FF7F}Успешно установлена версия " .. updateRemoteVer), 
             -1
         )
+        sampAddChatMessage(
+            u8:decode("{6495ED}[Leader Helper] {FFFFFF}Скрипт перезагружается..."), 
+            -1
+        )
+        
+        wait(1000)
+        
+        thisScript():reload()
     else
-        sampAddChatMessage(u8:decode("{FF4444}[Leader Helper] Не удалось заменить файл"), -1)
+        sampAddChatMessage(
+            u8:decode("{FF4444}[Leader Helper] Не удалось заменить файл скрипта"), 
+            -1
+        )
     end
 end
 
@@ -194,10 +206,6 @@ local function toWide(ansiStr)
     return wbuf
 end
 
--- =========================================
--- КОНФИГУРАЦИЯ
--- =========================================
-
 local CONFIG_FILE = "LeaderHelper.ini"
 local EXPORT_SEP  = "~|~"
 
@@ -280,11 +288,6 @@ local function notify(kind, msg)
     sampAddChatMessage(u8:decode(p .. msg), -1)
 end
 
--- =========================================
--- ПРОФИЛИ
--- =========================================
-
--- СТАТИЧНЫЙ ШАБЛОН (без вызова FFI каждый кадр)
 local DEFAULT_PROFILE_TEMPLATE = {
     name            = "Новый профиль",
     commands        = "",
@@ -306,12 +309,11 @@ local DEFAULT_PROFILE_TEMPLATE = {
 
 local function defaultProfile(name)
     local p = {}
-    -- Копируем поля из шаблона
     for k, v in pairs(DEFAULT_PROFILE_TEMPLATE) do
         p[k] = v
     end
     p.name = name or "Новый профиль"
-    p.created = "" -- НЕ вызываем FFI здесь (краш: cannot resume non-suspended coroutine)
+    p.created = "" 
     return p
 end
 
@@ -343,7 +345,6 @@ local function getProfile(index)
         cfg[key] = defaultProfile("Профиль " .. tostring(index)) 
     end
     local p = cfg[key]
-    -- Заполняем только отсутствующие поля
     for f, dv in pairs(DEFAULT_PROFILE_TEMPLATE) do
         if p[f] == nil then 
             p[f] = dv 
@@ -356,10 +357,6 @@ end
 
 local selectedProfile = cfg.profiles.selected
 local activeCfg = getProfile(selectedProfile)
-
--- =========================================
--- РАДИАЛЬНОЕ МЕНЮ LEADER HELPER
--- =========================================
 
 cfg.customActions = cfg.customActions or { count = "0" }
 cfg.customActions.count = tonumber(cfg.customActions.count) or 0
@@ -459,13 +456,9 @@ local function runRadialAction(rpLines, command, values, evidenceMode)
 
     lua_thread.create(function()
         local ok, err = pcall(function()
-            -- ВАЖНО: здесь НЕТ wait(), pcall только для защиты от ошибок
-            -- но wait нужен... поэтому pcall убираем, а ошибку ловим иначе
         end)
-        -- Выполняем без pcall, но с защитой флага через отдельную функцию
         local success, err = true, nil
 
-        -- Отправка RP-строк
         for _, line in ipairs(lines) do
             local okSend, e = pcall(function()
                 sendRadialChat(replaceActionValues(line, values))
@@ -544,10 +537,6 @@ local function saveCustomRadialAction()
     radialNotify("Добавлено действие: " .. name)
 end
 
-
--- =========================================
--- СТАНДАРТНЫЕ ДЕЙСТВИЯ
--- =========================================
 
 local function confirmRadialAction()
     local values = getRadialValues()
@@ -646,10 +635,6 @@ local function confirmRadialAction()
     end
 end
 
--- =========================================
--- АНИМАЦИИ
--- =========================================
-
 local function lerp(a, b, t) return a + (b - a) * math.min(math.max(t, 0), 1) end
 
 local function rgba(r, g, b, a)
@@ -680,10 +665,6 @@ for i = 1, 25 do
 end
 local tabIndicatorX = -1
 
--- =========================================
--- UI ПЕРЕМЕННЫЕ
--- =========================================
-
 local showMenu           = ffi.new('bool[1]', false)
 local currentTab         = 1
 local sequenceRunning    = false
@@ -708,10 +689,6 @@ local checkTime          = ffi.new('bool[1]', false)
 local checkScreenshot    = ffi.new('bool[1]', false)
 
 local myFont = nil
-
--- =========================================
--- БУФЕРЫ
--- =========================================
 
 local function setBuffer(buf, val)
     ffi.fill(buf, ffi.sizeof(buf))
@@ -752,10 +729,6 @@ local function storeCurrentProfile()
     cfg.profiles.selected     = selectedProfile
     ini.save(cfg, CONFIG_FILE)
 end
-
--- =========================================
--- ОПЕРАЦИИ С ПРОФИЛЯМИ
--- =========================================
 
 local function selectProfile(index)
     if index < 1 or index > cfg.profiles.count or index == selectedProfile then return end
@@ -845,7 +818,6 @@ local function toggleProfile(index)
         (was and "Деактивирован: " or "Активирован: ") .. p.name)
 end
 
--- Экспорт/Импорт
 local function exportProfileStr(index)
     local p = getProfile(index)
     return table.concat({
@@ -885,10 +857,6 @@ local function importProfileStr(str)
     notify("success", "Импортирован: " .. np.name)
     return true
 end
-
--- =========================================
--- СТИЛИЗАЦИЯ
--- =========================================
 
 imgui.OnInitialize(function()
     local fontPath = getFolderPath(0x14) .. '\\tahoma.ttf'
@@ -930,10 +898,6 @@ imgui.OnInitialize(function()
     s.Colors[imgui.Col.ResizeGripHovered] = imgui.ImVec4(0.28, 0.48, 0.72, 0.50)
     s.Colors[imgui.Col.ResizeGripActive]  = imgui.ImVec4(0.33, 0.55, 0.78, 0.70)
 end)
-
--- =========================================
--- СОХРАНЕНИЕ / СКРИНШОТ / ЗАПУСК
--- =========================================
 
 local function saveSettings()
     local commands = ffi.string(bufCommands)
@@ -1150,10 +1114,6 @@ takeScreenshot = function(customFolderUtf8)
     screenshotInProgress = false
 end
 
--- =========================================
--- ОТСЛЕЖИВАНИЕ ПРИНЯТИЯ ИНВАЙТА
--- =========================================
-
 function sampev.onServerMessage(color, text)
     if not pendingInviteEvidence then
         return
@@ -1207,10 +1167,6 @@ local function runSequence(profile)
     ini.save(cfg, CONFIG_FILE)
     sequenceRunning = false
 end
-
--- =========================================
--- CUSTOM DRAWING
--- =========================================
 
 local function drawAnimBg()
     local dl, wp, ws, t = imgui.GetWindowDrawList(), imgui.GetWindowPos(), imgui.GetWindowSize(), os.clock()
@@ -1347,10 +1303,6 @@ local function drawStatusDot(running)
     imgui.Dummy(imgui.ImVec2(14, 14))
 end
 
--- =========================================
--- ВКЛ 1: РЕДАКТОР
--- =========================================
-
 local function drawEditorTab()
     secTitle("РЕДАКТОР ПРОФИЛЯ")
     imgui.Text("Текущий профиль:")
@@ -1405,10 +1357,6 @@ local function drawEditorTab()
         imgui.TextColored(imgui.ImVec4(0.5,0.55,0.65,0.8), "Ожидание")
     end
 end
-
--- =========================================
--- ВКЛ 2: ПРОФИЛИ
--- =========================================
 
 local function drawProfileInfo()
     local p = getProfile(selectedProfile)
@@ -1554,10 +1502,6 @@ local function drawProfilesTab()
     end
 end
 
--- =========================================
--- ВКЛ 3: НАСТРОЙКИ
--- =========================================
-
 local function drawSettingsTab()
     secTitle("НАСТРОЙКИ АВТОМАТИЗАЦИИ")
     gradSep()
@@ -1593,10 +1537,6 @@ local function drawSettingsTab()
         notify("success", "Настройки сохранены!")
     end
 end
-
--- =========================================
--- ГЛАВНОЕ ОКНО
--- =========================================
 
 local function drawMenu()
     if myFont then imgui.PushFont(myFont) end
@@ -1635,7 +1575,6 @@ local function drawUpdateWindow()
 
     imgui.Begin("##UpdateWindow", updateAvailable, flags)
 
-    -- Фон
     local dl = imgui.GetWindowDrawList()
     local wp = imgui.GetWindowPos()
     local ws = imgui.GetWindowSize()
@@ -1653,11 +1592,9 @@ local function drawUpdateWindow()
         rgba(0.25, 0.55, 0.95, 0.85), 12.0
     )
 
-    -- Заголовок
     imgui.SetCursorPos(imgui.ImVec2(20, 18))
     imgui.TextColored(imgui.ImVec4(0.55, 0.85, 1.0, 1.0), "ДОСТУПНО ОБНОВЛЕНИЕ")
 
-    -- Версии
     imgui.SetCursorPos(imgui.ImVec2(20, 55))
     imgui.Text("Текущая версия: " .. SCRIPT_VERSION)
     imgui.SetCursorPos(imgui.ImVec2(20, 80))
@@ -1666,11 +1603,9 @@ local function drawUpdateWindow()
         "Новая версия: " .. updateRemoteVer
     )
 
-    -- Описание
     imgui.SetCursorPos(imgui.ImVec2(20, 115))
     imgui.TextWrapped("Обновить скрипт сейчас?")
 
-    -- Кнопки
     imgui.SetCursorPos(imgui.ImVec2(20, 200))
     imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.12, 0.45, 0.20, 0.90))
     imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.18, 0.55, 0.28, 0.95))
@@ -1695,10 +1630,6 @@ local function drawUpdateWindow()
     if myFont then imgui.PopFont() end
 end
 
--- =========================================
--- РАДИАЛЬНЫЙ ИНТЕРФЕЙС
--- =========================================
-
 local function radialButton(label, x, y, width, height)
     imgui.SetCursorPos(imgui.ImVec2(x, y))
     return imgui.Button(label, imgui.ImVec2(width, height))
@@ -1710,7 +1641,6 @@ local function drawRadialMenu()
     local isMenu = radialMode == "menu"
     local isCustom = radialMode == "custom"
 
-    -- Увеличенное окно для кольца, чтобы X и кнопки не пересекались
     local windowW = isMenu and 520 or (isCustom and 480 or 390)
     local windowH = isMenu and 520 or (isCustom and 430 or 280)
 
@@ -1747,21 +1677,17 @@ local function drawRadialMenu()
         local ringRadius = 185
         local centerRadius = 75
 
-        -- Внешнее кольцо
         dl:AddCircle(imgui.ImVec2(cx, cy), ringRadius, rgba(0.25, 0.55, 0.95, 0.55), 90, 2)
 
-        -- Центральный круг
         dl:AddCircleFilled(imgui.ImVec2(cx, cy), centerRadius, rgba(0.055, 0.085, 0.14, 0.98), 90)
         dl:AddCircle(imgui.ImVec2(cx, cy), centerRadius, rgba(0.25, 0.55, 0.95, 0.9), 90, 2)
 
-        -- Текст в центре
         imgui.SetCursorPos(imgui.ImVec2(215, 240))
         imgui.Text("LEADER")
 
         imgui.SetCursorPos(imgui.ImVec2(221, 265))
         imgui.Text("ID: " .. tostring(radialPlayerId))
 
-        -- Список стандартных действий
         local actions = {
             { name = "ИНВАЙТ", key = "invite" },
             { name = "РАНГ", key = "rank" },
@@ -1794,12 +1720,10 @@ local function drawRadialMenu()
             end
         end
 
-        -- Кнопка "добавить действие" внизу
         if radialButton("+ ДЕЙСТВИЕ", 195, 445, 130, 35) then
             radialMode = "custom"
         end
 
-        -- Кнопка X в правом верхнем углу, далеко от кольца
         if radialButton("X", 470, 10, 40, 30) then
             closeRadial()
         end
@@ -1897,10 +1821,6 @@ local function drawRadialMenu()
     imgui.End()
 end
 
--- =========================================
--- ОТРИСОВКА РАДИАЛЬНОГО МЕНЮ (ФИКС)
--- =========================================
-
 imgui.OnFrame(
     function()
         return showMenu[0] or radialOpen[0] or updateAvailable[0]
@@ -1916,10 +1836,6 @@ imgui.OnFrame(
         end
     end
 )
-
--- =========================================
--- ОСНОВНОЙ ПОТОК
--- =========================================
 
 function main()
     repeat wait(0) until isSampAvailable()
@@ -1958,7 +1874,6 @@ function main()
             return
         end
 
-        -- Закрываем основное меню, если оно открыто
         showMenu[0] = false
 
         radialPlayerId = id
