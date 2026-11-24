@@ -8,7 +8,7 @@ local encoding = require 'encoding'
 local lfs = require 'lfs'
 local sampev = require 'samp.events'
 
-local SCRIPT_VERSION = "0.3.8"
+local SCRIPT_VERSION = "0.3.9"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
 local updateAvailable    = ffi.new('bool[1]', false)
 local updateRemoteVer    = ""
@@ -81,42 +81,30 @@ local function checkUpdate()
 end
 
 local function applyUpdate()
-    if not updateContent or #updateContent < 100 then 
-        return 
-    end
-
+    if not updateContent or #updateContent < 100 then return end
+    
     updateAvailable[0] = false
 
     os.remove(SCRIPT_PATH)
     local ok = os.rename(TEMP_SCRIPT, SCRIPT_PATH)
     if not ok then
         local f = io.open(SCRIPT_PATH, "w")
-        if f then 
-            f:write(updateContent)
-            f:close()
-            ok = true 
-        end
+        if f then f:write(updateContent); f:close(); ok = true end
         if ok then os.remove(TEMP_SCRIPT) end
     end
 
     if ok then
-        sampAddChatMessage(
-            u8:decode("{6495ED}[Leader Helper] {00FF7F}Успешно установлена версия " .. updateRemoteVer), 
-            -1
-        )
-        sampAddChatMessage(
-            u8:decode("{6495ED}[Leader Helper] {FFFFFF}Скрипт перезагружается..."), 
-            -1
-        )
+        -- Записываем в память (INI), что мы обновились
+        cfg.justUpdated = updateRemoteVer
+        ini.save(cfg, CONFIG_FILE)
+
+        sampAddChatMessage(u8:decode("{6495ED}[Leader Helper] {00FF7F}Обновлено до версии " .. updateRemoteVer .. "!"), -1)
+        wait(1000) 
         
-        wait(1000)
-        
+        -- Перезагружаемся
         thisScript():reload()
     else
-        sampAddChatMessage(
-            u8:decode("{FF4444}[Leader Helper] Не удалось заменить файл скрипта"), 
-            -1
-        )
+        sampAddChatMessage(u8:decode("{FF4444}[Leader Helper] Не удалось заменить файл скрипта"), -1)
     end
 end
 
@@ -1860,6 +1848,13 @@ function main()
     end)
 
     notify("success", "Скрипт запущен! /ltools — меню")
+    if cfg.justUpdated then
+        sampAddChatMessage(u8:decode("{6495ED}[Leader Helper] {00FF7F}Скрипт успешно обновлён до версии " .. cfg.justUpdated), -1)
+        cfg.justUpdated = nil
+        ini.save(cfg, CONFIG_FILE)
+    else
+        notify("success", "Скрипт запущен! /ltools — меню")
+    end
 
         sampRegisterChatCommand("lh", function(param)
         local id = tonumber(trim(param or ""))
