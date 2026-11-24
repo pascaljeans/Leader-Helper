@@ -11,8 +11,11 @@ local sampev = require 'samp.events'
 -- =========================================
 -- АВТООБНОВЛЕНИЕ
 -- =========================================
-local SCRIPT_VERSION = "0.3.4"
+local SCRIPT_VERSION = "0.3.5"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
+local updateAvailable    = ffi.new('bool[1]', false)
+local updateRemoteVer    = ""
+local updateContent      = ""
 
 local SCRIPT_PATH = thisScript().path
 local TEMP_SCRIPT = os.getenv("TEMP") .. "\\lh_update.tmp"
@@ -682,10 +685,6 @@ local tabIndicatorX = -1
 -- =========================================
 
 local showMenu           = ffi.new('bool[1]', false)
-local updateAvailable    = ffi.new('bool[1]', false)
-local updateRemoteVer    = ""
-local updateContent      = ""
-local updateDownloading  = false
 local currentTab         = 1
 local sequenceRunning    = false
 local lastSentKey        = nil
