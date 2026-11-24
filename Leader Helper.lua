@@ -8,7 +8,7 @@ local encoding = require 'encoding'
 local lfs = require 'lfs'
 local sampev = require 'samp.events'
 
-local SCRIPT_VERSION = "0.7.4"
+local SCRIPT_VERSION = "0.4.3"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
 
 local updateAvailable    = ffi.new('bool[1]', false)
@@ -658,10 +658,7 @@ local currentTab         = 1
 local sequenceRunning    = false
 local lastSentKey        = nil
 local profileToDelete    = 0
-local showScrMenu       = ffi.new('bool[1]', false)
-local scrFolders        = {"Собеседование", "Инвайты"}
-local scrSelectedIdx    = 1
-local bufNewFolder      = ffi.new('char[128]')
+
 local bufCommands        = ffi.new('char[4096]')
 local bufHour            = ffi.new('char[8]')
 local bufMin             = ffi.new('char[8]')
@@ -1250,96 +1247,6 @@ local function grayBtn(text, size)
     local r = imgui.Button(text, size); imgui.PopStyleColor(3); return r
 end
 
-local function drawScrMenu()
-    if not showScrMenu[0] then return end
-
-    if myFont then imgui.PushFont(myFont) end
-    imgui.SetNextWindowSize(imgui.ImVec2(600, 780), imgui.Cond.Always)
-    imgui.Begin("Быстрый скриншот", showScrMenu, imgui.WindowFlags.NoResize)
-
-    drawAnimBg()
-    
-    -- Заголовок в стиле основного меню
-    secTitle("БЫСТРЫЙ СКРИНШОТ")
-    gradSep()
-
-    imgui.Text("Выберите папку для сохранения скриншота:")
-    imgui.Spacing()
-
-    -- Список папок (в виде красивого списка)
-    imgui.BeginChild("##scr_folders", imgui.ImVec2(540, 300), true)
-    for i, folder in ipairs(scrFolders) do
-        local isSelected = (scrSelectedIdx == i)
-        if imgui.Selectable(folder, isSelected) then
-            scrSelectedIdx = i
-        end
-    end
-    imgui.EndChild()
-    
-    gradSep()
-
-    -- Создание новой папки
-    secTitle("СОЗДАТЬ НОВУЮ ПАПКУ")
-    imgui.Text("Название папки:")
-    imgui.PushItemWidth(380)
-    imgui.InputText("##newfolder", bufNewFolder, ffi.sizeof(bufNewFolder))
-    imgui.PopItemWidth()
-    imgui.SameLine()
-    if accBtn("ДОБАВИТЬ", imgui.ImVec2(150, 32), 0) then
-        local newName = trim(ffi.string(bufNewFolder))
-        if newName ~= "" then
-            local exists = false
-            for _, f in ipairs(scrFolders) do
-                if f == newName then exists = true; break end
-            end
-            if not exists then
-                table.insert(scrFolders, newName)
-                scrSelectedIdx = #scrFolders
-                setBuffer(bufNewFolder, "")
-                notify("success", "Папка добавлена: " .. newName)
-            else
-                notify("error", "Такая папка уже есть!")
-            end
-        end
-    end
-
-    gradSep()
-
-    -- Главная кнопка действия
-    if accBtn("СДЕЛАТЬ СКРИНШОТ И /time", imgui.ImVec2(540, 45), 1) then
-        showScrMenu[0] = false
-        local targetFolder = scrFolders[scrSelectedIdx]
-        
-        lua_thread.create(function()
-            sampSendChat("/time")
-            wait(500)
-            takeScreenshot(targetFolder)
-        end)
-    end
-
-    imgui.End()
-    if myFont then imgui.PopFont() end
-end
-
-    imgui.SetCursorPos(imgui.ImVec2(20, 335))
-    imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.1, 0.5, 0.2, 0.9))
-    imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.2, 0.7, 0.3, 0.95))
-    if imgui.Button("СДЕЛАТЬ СКРИНШОТ", imgui.ImVec2(440, 45)) then
-        showScrMenu[0] = false
-        local targetFolder = scrFolders[scrSelectedIdx]
-        
-        lua_thread.create(function()
-            sampSendChat("/time")
-            wait(500)
-            takeScreenshot(targetFolder)
-        end)
-    end
-    imgui.PopStyleColor(2)
-
-    imgui.End()
-    if myFont then imgui.PopFont() end
-end
-
 local function drawTabBar()
     local dl, t = imgui.GetWindowDrawList(), os.clock()
     local tw, th = 174, 38
@@ -1904,13 +1811,17 @@ end
 
 imgui.OnFrame(
     function()
-        return showMenu[0] or radialOpen[0] or updateAvailable[0] or showScrMenu[0]
+        return showMenu[0] or radialOpen[0] or updateAvailable[0]
     end,
     function()
-        if updateAvailable[0] then drawUpdateWindow() end
-        if showScrMenu[0] then drawScrMenu() end
-        if radialOpen[0] then drawRadialMenu()
-        elseif showMenu[0] then drawMenu() end
+        if updateAvailable[0] then
+            drawUpdateWindow()
+        end
+        if radialOpen[0] then
+            drawRadialMenu()
+        elseif showMenu[0] then
+            drawMenu()
+        end
     end
 )
 
@@ -1964,14 +1875,7 @@ function main()
     end)
 
         local lastErrorAt = 0
-    
-    sampRegisterChatCommand("scr", function()
-        showScrMenu[0] = true
-        showMenu[0] = false
-        radialOpen[0] = false
-    end)
-    
-    
+
     while true do
         wait(100)
 
