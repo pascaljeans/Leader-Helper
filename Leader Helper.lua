@@ -8,11 +8,13 @@ local encoding = require 'encoding'
 local lfs = require 'lfs'
 local sampev = require 'samp.events'
 
-local SCRIPT_VERSION = "0.3.9"
+local SCRIPT_VERSION = "0.4.0"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
 local updateAvailable    = ffi.new('bool[1]', false)
 local updateRemoteVer    = ""
 local updateContent      = ""
+encoding.default = 'CP1251'
+local u8 = encoding.UTF8
 
 local SCRIPT_PATH = thisScript().path
 local TEMP_SCRIPT = os.getenv("TEMP") .. "\\lh_update.tmp"
@@ -146,9 +148,6 @@ local function getFormattedDate()
     local t = getWinTime()
     return string.format("%04d-%02d-%02d %02d:%02d", t.year, t.month, t.day, t.hour, t.min)
 end
-
-encoding.default = 'CP1251'
-local u8 = encoding.UTF8
 
 local function utf8ToAnsi(s)
     local str = tostring(s or "")
