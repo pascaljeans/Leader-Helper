@@ -8,7 +8,7 @@ local encoding = require 'encoding'
 local lfs = require 'lfs'
 local sampev = require 'samp.events'
 
-local SCRIPT_VERSION = "0.4.3"
+local SCRIPT_VERSION = "0.7.1"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
 
 local updateAvailable    = ffi.new('bool[1]', false)
@@ -658,7 +658,10 @@ local currentTab         = 1
 local sequenceRunning    = false
 local lastSentKey        = nil
 local profileToDelete    = 0
-
+local showScrMenu       = ffi.new('bool[1]', false)
+local scrFolders        = {"Собеседование", "Инвайты"}
+local scrSelectedIdx    = 1
+local bufNewFolder      = ffi.new('char[128]')
 local bufCommands        = ffi.new('char[4096]')
 local bufHour            = ffi.new('char[8]')
 local bufMin             = ffi.new('char[8]')
@@ -1247,6 +1250,98 @@ local function grayBtn(text, size)
     local r = imgui.Button(text, size); imgui.PopStyleColor(3); return r
 end
 
+local function drawScrMenu()
+    if not showScrMenu[0] then return end
+
+    if myFont then imgui.PushFont(myFont) end
+
+    local sw, sh = getScreenResolution()
+    imgui.SetNextWindowSize(imgui.ImVec2(480, 400), imgui.Cond.Always)
+    imgui.SetNextWindowPos(
+        imgui.ImVec2(sw / 2, sh / 2),
+        imgui.Cond.Always,
+        imgui.ImVec2(0.5, 0.5)
+    )
+
+    local flags = imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.NoResize + imgui.WindowFlags.NoMove
+    imgui.Begin("##ScrWindow", showScrMenu, flags)
+
+    -- Красивый фон
+    local dl = imgui.GetWindowDrawList()
+    local wp = imgui.GetWindowPos()
+    local ws = imgui.GetWindowSize()
+    dl:AddRectFilledMultiColor(
+        imgui.ImVec2(wp.x, wp.y), imgui.ImVec2(wp.x + ws.x, wp.y + 4),
+        rgba(0.2, 0.7, 0.4, 0.95), rgba(0.3, 0.9, 0.5, 0.95), rgba(0.3, 0.9, 0.5, 0.35), rgba(0.2, 0.7, 0.4, 0.35)
+    )
+    dl:AddRect(imgui.ImVec2(wp.x + 1, wp.y + 1), imgui.ImVec2(wp.x + ws.x - 1, wp.y + ws.y - 1), rgba(0.2, 0.7, 0.4, 0.85), 12.0)
+
+    imgui.SetCursorPos(imgui.ImVec2(20, 18))
+    imgui.TextColored(imgui.ImVec4(0.4, 1.0, 0.6, 1.0), "БЫСТРЫЙ СКРИНШОТ")
+
+    imgui.SetCursorPos(imgui.ImVec2(440, 15))
+    if imgui.Button("X", imgui.ImVec2(25, 25)) then
+        showScrMenu[0] = false
+    end
+
+    imgui.SetCursorPos(imgui.ImVec2(20, 60))
+    imgui.Text("Выберите папку для сохранения:")
+    
+    imgui.SetCursorPos(imgui.ImVec2(20, 85))
+    imgui.BeginChild("##folders_list", imgui.ImVec2(440, 150), true)
+    for i, folder in ipairs(scrFolders) do
+        local isSelected = (scrSelectedIdx == i)
+        if imgui.Selectable(folder, isSelected) then
+            scrSelectedIdx = i
+        end
+    end
+    imgui.EndChild()
+
+    imgui.SetCursorPos(imgui.ImVec2(20, 250))
+    imgui.Text("Создать новую папку:")
+    imgui.SetCursorPos(imgui.ImVec2(20, 275))
+    imgui.SetNextItemWidth(290)
+    imgui.InputText("##newfolder", bufNewFolder, ffi.sizeof(bufNewFolder))
+    
+    imgui.SameLine()
+    if imgui.Button("ДОБАВИТЬ", imgui.ImVec2(140, 25)) then
+        local newName = trim(ffi.string(bufNewFolder))
+        if newName ~= "" then
+            -- Проверяем, нет ли уже такой
+            local exists = false
+            for _, f in ipairs(scrFolders) do
+                if f == newName then exists = true; break end
+            end
+            if not exists then
+                table.insert(scrFolders, newName)
+                scrSelectedIdx = #scrFolders
+                setBuffer(bufNewFolder, "")
+                notify("success", "Папка добавлена: " .. newName)
+            else
+                notify("error", "Такая папка уже есть!")
+            end
+        end
+    end
+
+    imgui.SetCursorPos(imgui.ImVec2(20, 335))
+    imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.1, 0.5, 0.2, 0.9))
+    imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.2, 0.7, 0.3, 0.95))
+    if imgui.Button("СДЕЛАТЬ СКРИНШОТ", imgui.ImVec2(440, 45)) then
+        showScrMenu[0] = false
+        local targetFolder = scrFolders[scrSelectedIdx]
+        
+        lua_thread.create(function()
+            sampSendChat("/time")
+            wait(500)
+            takeScreenshot(targetFolder)
+        end)
+    end
+    imgui.PopStyleColor(2)
+
+    imgui.End()
+    if myFont then imgui.PopFont() end
+end
+
 local function drawTabBar()
     local dl, t = imgui.GetWindowDrawList(), os.clock()
     local tw, th = 174, 38
@@ -1811,17 +1906,13 @@ end
 
 imgui.OnFrame(
     function()
-        return showMenu[0] or radialOpen[0] or updateAvailable[0]
+        return showMenu[0] or radialOpen[0] or updateAvailable[0] or showScrMenu[0]
     end,
     function()
-        if updateAvailable[0] then
-            drawUpdateWindow()
-        end
-        if radialOpen[0] then
-            drawRadialMenu()
-        elseif showMenu[0] then
-            drawMenu()
-        end
+        if updateAvailable[0] then drawUpdateWindow() end
+        if showScrMenu[0] then drawScrMenu() end
+        if radialOpen[0] then drawRadialMenu()
+        elseif showMenu[0] then drawMenu() end
     end
 )
 
@@ -1875,7 +1966,14 @@ function main()
     end)
 
         local lastErrorAt = 0
-
+    
+    sampRegisterChatCommand("scr", function()
+        showScrMenu[0] = true
+        showMenu[0] = false
+        radialOpen[0] = false
+    end)
+    
+    
     while true do
         wait(100)
 
