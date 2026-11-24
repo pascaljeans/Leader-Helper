@@ -11,11 +11,11 @@ local sampev = require 'samp.events'
 -- =========================================
 -- АВТООБНОВЛЕНИЕ
 -- =========================================
-local SCRIPT_VERSION = "0.5.0"
+local SCRIPT_VERSION = "0.3.1"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
 
 local SCRIPT_PATH = thisScript().path
-local TEMP_SCRIPT = getWorkingDirectory() .. "\\moonloader\\lh_update.tmp"
+local TEMP_SCRIPT = os.getenv("TEMP") .. "\\lh_update.tmp"
 
 local function readFile(path)
     local f = io.open(path, "r")
