@@ -11,7 +11,7 @@ local sampev = require 'samp.events'
 -- =========================================
 -- АВТООБНОВЛЕНИЕ
 -- =========================================
-local SCRIPT_VERSION = "0.3.3"
+local SCRIPT_VERSION = "0.3.2"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
 
 local SCRIPT_PATH = thisScript().path
@@ -48,8 +48,9 @@ end
 
 local function checkUpdate()
     if fileExists(TEMP_SCRIPT) then os.remove(TEMP_SCRIPT) end
+
     downloadUrlToFile(UPDATE_URL_SCRIPT, TEMP_SCRIPT)
-    wait(1000)
+    wait(3000)
 
     if not fileExists(TEMP_SCRIPT) then
         return false, "Не удалось скачать скрипт"
@@ -72,19 +73,36 @@ local function checkUpdate()
         return false, nil
     end
 
+    updateRemoteVer = remoteVer
+    updateContent = content
+    updateAvailable[0] = true
+
+    return true, remoteVer
+end
+
+local function applyUpdate()
+    if not updateContent or #updateContent < 100 then
+        sampAddChatMessage(u8:decode("{FF4444}[Leader Helper] Нет данных для обновления"), -1)
+        return
+    end
+
     os.remove(SCRIPT_PATH)
     local ok = os.rename(TEMP_SCRIPT, SCRIPT_PATH)
     if not ok then
         local f = io.open(SCRIPT_PATH, "w")
-        if f then f:write(content); f:close(); ok = true end
+        if f then f:write(updateContent); f:close(); ok = true end
         if ok then os.remove(TEMP_SCRIPT) end
     end
 
-    if not ok then
-        return false, "Не удалось заменить файл скрипта"
+    if ok then
+        updateAvailable[0] = false
+        sampAddChatMessage(
+            u8:decode("{6495ED}[Leader Helper] {00FF7F}Обновлено до " .. updateRemoteVer .. ". Напиши /mlreload"),
+            -1
+        )
+    else
+        sampAddChatMessage(u8:decode("{FF4444}[Leader Helper] Не удалось заменить файл"), -1)
     end
-
-    return true, remoteVer
 end
 
 ffi.cdef[[
@@ -664,6 +682,10 @@ local tabIndicatorX = -1
 -- =========================================
 
 local showMenu           = ffi.new('bool[1]', false)
+local updateAvailable    = ffi.new('bool[1]', false)
+local updateRemoteVer    = ""
+local updateContent      = ""
+local updateDownloading  = false
 local currentTab         = 1
 local sequenceRunning    = false
 local lastSentKey        = nil
@@ -1593,9 +1615,86 @@ local function drawMenu()
     if myFont then imgui.PopFont() end
 end
 
--- Главное и радиальное окна обслуживаются одним OnFrame ниже.
--- Это исключает конкурирующие циклы отрисовки двух окон.
+local function drawUpdateWindow()
+    if not updateAvailable[0] then return end
 
+    if myFont then imgui.PushFont(myFont) end
+
+    local sw, sh = getScreenResolution()
+    imgui.SetNextWindowSize(imgui.ImVec2(460, 260), imgui.Cond.Always)
+    imgui.SetNextWindowPos(
+        imgui.ImVec2(sw / 2, sh / 2),
+        imgui.Cond.Always,
+        imgui.ImVec2(0.5, 0.5)
+    )
+
+    local flags =
+        imgui.WindowFlags.NoTitleBar +
+        imgui.WindowFlags.NoResize +
+        imgui.WindowFlags.NoMove +
+        imgui.WindowFlags.NoCollapse
+
+    imgui.Begin("##UpdateWindow", updateAvailable, flags)
+
+    -- Фон
+    local dl = imgui.GetWindowDrawList()
+    local wp = imgui.GetWindowPos()
+    local ws = imgui.GetWindowSize()
+    dl:AddRectFilledMultiColor(
+        imgui.ImVec2(wp.x, wp.y),
+        imgui.ImVec2(wp.x + ws.x, wp.y + 4),
+        rgba(0.25, 0.55, 0.95, 0.95),
+        rgba(0.45, 0.75, 1.0, 0.95),
+        rgba(0.45, 0.75, 1.0, 0.35),
+        rgba(0.25, 0.55, 0.95, 0.35)
+    )
+    dl:AddRect(
+        imgui.ImVec2(wp.x + 1, wp.y + 1),
+        imgui.ImVec2(wp.x + ws.x - 1, wp.y + ws.y - 1),
+        rgba(0.25, 0.55, 0.95, 0.85), 12.0
+    )
+
+    -- Заголовок
+    imgui.SetCursorPos(imgui.ImVec2(20, 18))
+    imgui.TextColored(imgui.ImVec4(0.55, 0.85, 1.0, 1.0), "ДОСТУПНО ОБНОВЛЕНИЕ")
+
+    -- Версии
+    imgui.SetCursorPos(imgui.ImVec2(20, 55))
+    imgui.Text("Текущая версия: " .. SCRIPT_VERSION)
+    imgui.SetCursorPos(imgui.ImVec2(20, 80))
+    imgui.TextColored(
+        imgui.ImVec4(0.3, 1.0, 0.5, 1.0),
+        "Новая версия: " .. updateRemoteVer
+    )
+
+    -- Описание
+    imgui.SetCursorPos(imgui.ImVec2(20, 115))
+    imgui.TextWrapped("Обновить скрипт сейчас? После обновления нужно написать /mlreload.")
+
+    -- Кнопки
+    imgui.SetCursorPos(imgui.ImVec2(20, 200))
+    imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.12, 0.45, 0.20, 0.90))
+    imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.18, 0.55, 0.28, 0.95))
+    imgui.PushStyleColor(imgui.Col.ButtonActive, imgui.ImVec4(0.08, 0.38, 0.15, 1.0))
+    if imgui.Button("ОБНОВИТЬ", imgui.ImVec2(200, 38)) then
+        applyUpdate()
+    end
+    imgui.PopStyleColor(3)
+
+    imgui.SameLine()
+
+    imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.30, 0.30, 0.30, 0.75))
+    imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.40, 0.40, 0.40, 0.85))
+    imgui.PushStyleColor(imgui.Col.ButtonActive, imgui.ImVec4(0.25, 0.25, 0.25, 1.0))
+    if imgui.Button("ПОЗЖЕ", imgui.ImVec2(200, 38)) then
+        updateAvailable[0] = false
+        if fileExists(TEMP_SCRIPT) then os.remove(TEMP_SCRIPT) end
+    end
+    imgui.PopStyleColor(3)
+
+    imgui.End()
+    if myFont then imgui.PopFont() end
+end
 
 -- =========================================
 -- РАДИАЛЬНЫЙ ИНТЕРФЕЙС
@@ -1805,12 +1904,12 @@ end
 
 imgui.OnFrame(
     function()
-        return showMenu[0] or radialOpen[0]
+        return showMenu[0] or radialOpen[0] or updateAvailable[0]
     end,
     function()
-        -- В каждый кадр рисуем только одно окно.
-        -- Приоритет у радиального меню; команды /lh и /ltools
-        -- дополнительно переключают флаги взаимоисключающим образом.
+        if updateAvailable[0] then
+            drawUpdateWindow()
+        end
         if radialOpen[0] then
             drawRadialMenu()
         elseif showMenu[0] then
@@ -1831,28 +1930,7 @@ function main()
         local updated, ver = checkUpdate()
         if updated then
             sampAddChatMessage(
-                u8:decode("{6495ED}[Leader Helper] {00FF7F}Обновлено до версии " .. tostring(ver) .. ". Перезагружаю..."),
-                -1
-            )
-            wait(1000)
-            -- Пытаемся перезагрузить скрипт сами
-            local reloaded = false
-            if thisScript and thisScript().reload then
-                local ok, err = pcall(function()
-                    thisScript():reload()
-                end)
-                reloaded = ok
-            end
-            if not reloaded then
-                -- fallback: просим игрока
-                sampAddChatMessage(
-                    u8:decode("{FFD700}[Leader Helper] Напиши /mlreload чтобы применить обновление"),
-                    -1
-                )
-            end
-        elseif ver then
-            sampAddChatMessage(
-                u8:decode("{FF4444}[Leader Helper] Ошибка обновления: " .. tostring(ver)),
+                u8:decode("{6495ED}[Leader Helper] {FFD700}Доступно обновление " .. tostring(ver)),
                 -1
             )
         end
