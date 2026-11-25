@@ -8,7 +8,7 @@ local encoding = require 'encoding'
 local lfs = require 'lfs'
 local sampev = require 'samp.events'
 
-local SCRIPT_VERSION = "0.4.3"
+local SCRIPT_VERSION = "0.4.4"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
 
 local updateAvailable    = ffi.new('bool[1]', false)
@@ -100,16 +100,12 @@ local function applyUpdate()
     end
 
     if ok then
-        lastUpdateVersion = updateRemoteVer -- Сохраняем версию в память
-        
         sampAddChatMessage(u8:decode("{6495ED}[Leader Helper] {00FF7F}Обновлено до версии " .. updateRemoteVer .. "!"), -1)
-        wait(1000) 
-        
-        thisScript():reload()
+        lua_thread.create(function()
+            wait(1000) 
+            thisScript():reload()
+        end)
     else
-        sampAddChatMessage(u8:decode("{FF4444}[Leader Helper] Не удалось заменить файл скрипта"), -1)
-    end
-end
 
 ffi.cdef[[
     typedef struct _SYSTEMTIME {
@@ -1620,7 +1616,7 @@ end
 
 local function radialButton(label, x, y, width, height)
     imgui.SetCursorPos(imgui.ImVec2(x, y))
-    return imgui.Button(label, imgui.ImVec2(width, height))
+    return imgui.Button(tostring(label), imgui.ImVec2(width, height))
 end
 
 local function drawRadialMenu()
