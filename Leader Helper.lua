@@ -8,12 +8,13 @@ local encoding = require 'encoding'
 local lfs = require 'lfs'
 local sampev = require 'samp.events'
 
-local SCRIPT_VERSION = "0.5.0"
+local SCRIPT_VERSION = "0.5.1"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
 
 local updateAvailable    = ffi.new('bool[1]', false)
 local updateRemoteVer    = ""
 local updateContent      = ""
+local isCheckingUpdate = false
 
 lastUpdateVersion = nil 
 encoding.default = 'CP1251'
@@ -83,6 +84,29 @@ local function checkUpdate()
     updateAvailable[0] = true
 
     return true, remoteVer
+end
+
+local function manualCheckUpdate()
+    if isCheckingUpdate then return end
+    isCheckingUpdate = true
+    notify("info", "Проверяем обновления...")
+
+    lua_thread.create(function()
+        local updated, ver = checkUpdate()
+        isCheckingUpdate = false
+        
+        if updated then
+            -- Окно обновления откроется само, так как checkUpdate ставит флаг updateAvailable[0] = true
+            sampAddChatMessage(
+                u8:decode("{6495ED}[Leader Helper] {FFD700}Найдено обновление " .. tostring(ver)),
+                -1
+            )
+        elseif ver == nil then
+            notify("success", "У вас последняя версия (" .. SCRIPT_VERSION .. ")")
+        else
+            notify("error", "Ошибка проверки: " .. tostring(ver))
+        end
+    end)
 end
 
 local function applyUpdate()
@@ -1563,8 +1587,20 @@ local function drawSettingsTab()
     if accBtn("СОХРАНИТЬ НАСТРОЙКИ", imgui.ImVec2(540, 40), 0) then
         storeCurrentProfile()
         notify("success", "Настройки сохранены!")
+
+    gradSep()
+    
+    secTitle("ОБНОВЛЕНИЕ СКРИПТА")
+    imgui.Text("Текущая версия: " .. SCRIPT_VERSION)
+    imgui.Spacing()
+    
+    if isCheckingUpdate then
+        imgui.TextColored(imgui.ImVec4(1.0, 0.8, 0.2, 1.0), "Проверка...")
+    else
+        if accBtn("ПРОВЕРИТЬ ОБНОВЛЕНИЯ", imgui.ImVec2(540, 40), 2) then
+            manualCheckUpdate()
+        end
     end
-end
 
 local function drawMenu()
     if myFont then imgui.PushFont(myFont) end
