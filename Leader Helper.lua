@@ -8,7 +8,7 @@ local encoding = require 'encoding'
 local lfs = require 'lfs'
 local sampev = require 'samp.events'
 
-local SCRIPT_VERSION = "0.4.4"
+local SCRIPT_VERSION = "0.4.5"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
 
 local updateAvailable    = ffi.new('bool[1]', false)
@@ -100,11 +100,15 @@ local function applyUpdate()
 
     if ok then
         sampAddChatMessage(u8:decode("{6495ED}[Leader Helper] {00FF7F}Обновлено до версии " .. updateRemoteVer .. "!"), -1)
+        
         lua_thread.create(function()
             wait(1000) 
             thisScript():reload()
         end)
     else
+        sampAddChatMessage(u8:decode("{FF4444}[Leader Helper] Не удалось заменить файл скрипта"), -1)
+    end
+end
 
 ffi.cdef[[
     typedef struct _SYSTEMTIME {
