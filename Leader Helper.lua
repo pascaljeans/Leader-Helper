@@ -8,7 +8,7 @@ local encoding = require 'encoding'
 local lfs = require 'lfs'
 local sampev = require 'samp.events'
 
-local SCRIPT_VERSION = "0.4.5"
+local SCRIPT_VERSION = "0.5.0"
 local UPDATE_URL_SCRIPT = "https://raw.githubusercontent.com/pascaljeans/Leader-Helper/refs/heads/main/Leader%20Helper.lua"
 
 local updateAvailable    = ffi.new('bool[1]', false)
@@ -364,6 +364,11 @@ for i = 1, cfg.customActions.count do
     getCustomAction(i)
 end
 
+local editActionIndex = 0
+local bufEditName = ffi.new('char[128]')
+local bufEditRp = ffi.new('char[1024]')
+local bufEditCommand = ffi.new('char[512]')
+local showEditPopup = ffi.new('bool[1]', false)
 local pendingInviteEvidence = false
 local takeScreenshot
 local radialOpen = ffi.new("bool[1]", false)
@@ -524,6 +529,42 @@ local function saveCustomRadialAction()
     radialNotify("Добавлено действие: " .. name)
 end
 
+local function saveEditedRadialAction()
+    local name = trim(ffi.string(bufEditName))
+    local rp = trim(ffi.string(bufEditRp))
+    local command = trim(ffi.string(bufEditCommand))
+
+    if name == "" or rp == "" or command == "" then
+        radialNotify("Заполни все поля!")
+        return
+    end
+
+    local count = cfg.customActions.count
+    if editActionIndex > 0 and editActionIndex <= count then
+        cfg["customAction" .. editActionIndex] = {
+            name = name,
+            rp = encodeForIni(rp),
+            command = encodeForIni(command)
+        }
+        ini.save(cfg, CONFIG_FILE)
+        showEditPopup[0] = false
+        radialNotify("Действие изменено: " .. name)
+    end
+end
+
+local function deleteRadialAction()
+    local count = cfg.customActions.count
+    if editActionIndex > 0 and editActionIndex <= count then
+        for i = editActionIndex, count - 1 do
+            cfg["customAction" .. i] = cfg["customAction" .. (i + 1)]
+        end
+        cfg["customAction" .. count] = nil
+        cfg.customActions.count = count - 1
+        ini.save(cfg, CONFIG_FILE)
+        showEditPopup[0] = false
+        radialNotify("Действие удалено!")
+    end
+end
 
 local function confirmRadialAction()
     local values = getRadialValues()
@@ -1701,9 +1742,32 @@ local function drawRadialMenu()
             local x = 260 + math.cos(angle) * ringRadius - buttonW / 2
             local y = 260 + math.sin(angle) * ringRadius - buttonH / 2
 
+            -- Рисуем кнопку
             if radialButton(action.name, x, y, buttonW, buttonH) then
                 radialCustomIndex = action.index or 0
                 openRadialAction(action.key)
+            end
+
+            -- ПРОВЕРКА ПРАВОГО КЛИКА (только для кастомных действий)
+            if action.key == "custom" then
+                -- Проверяем, находится ли мышка над кнопкой
+                local mousePos = imgui.GetMousePos()
+                local itemRectMin = imgui.GetItemRectMin()
+                local itemRectMax = imgui.GetItemRectMax()
+                
+                if mousePos.x >= itemRectMin.x and mousePos.x <= itemRectMax.x and
+                   mousePos.y >= itemRectMin.y and mousePos.y <= itemRectMax.y then
+                    
+                    -- Если зажата правая кнопка мыши (или нажата)
+                    if imgui.IsMouseClicked(1) then -- 1 = правая кнопка
+                        editActionIndex = action.index
+                        local act = getCustomAction(action.index)
+                        setBuffer(bufEditName, act.name or "")
+                        setBuffer(bufEditRp, decodeFromIni(act.rp) or "")
+                        setBuffer(bufEditCommand, decodeFromIni(act.command) or "")
+                        showEditPopup[0] = true
+                    end
+                end
             end
         end
 
@@ -1808,9 +1872,47 @@ local function drawRadialMenu()
     imgui.End()
 end
 
+local function drawEditPopup()
+    if not showEditPopup[0] then return end
+
+    if myFont then imgui.PushFont(myFont) end
+    local sw, sh = getScreenResolution()
+    imgui.SetNextWindowSize(imgui.ImVec2(450, 400), imgui.Cond.Always)
+    imgui.SetNextWindowPos(imgui.ImVec2(sw/2, sh/2), imgui.Cond.Always, imgui.ImVec2(0.5, 0.5))
+
+    imgui.Begin("Редактирование действия", showEditPopup, imgui.WindowFlags.NoResize)
+    
+    imgui.Text("Название:")
+    imgui.PushItemWidth(400)
+    imgui.InputText("##editname", bufEditName, ffi.sizeof(bufEditName))
+    imgui.PopItemWidth()
+
+    imgui.Text("RP-отыгровка (каждая строка отдельно):")
+    imgui.InputTextMultiline("##editrp", bufEditRp, ffi.sizeof(bufEditRp), imgui.ImVec2(400, 100))
+
+    imgui.Text("Игровая команда:")
+    imgui.PushItemWidth(400)
+    imgui.InputText("##editcmd", bufEditCommand, ffi.sizeof(bufEditCommand))
+    imgui.PopItemWidth()
+
+    imgui.Spacing()
+    
+    if accBtn("СОХРАНИТЬ", imgui.ImVec2(190, 35), 0) then
+        saveEditedRadialAction()
+    end
+    
+    imgui.SameLine()
+    if redBtn("УДАЛИТЬ", imgui.ImVec2(190, 35)) then
+        deleteRadialAction()
+    end
+
+    imgui.End()
+    if myFont then imgui.PopFont() end
+end
+
 imgui.OnFrame(
     function()
-        return showMenu[0] or radialOpen[0] or updateAvailable[0]
+        return showMenu[0] or radialOpen[0] or updateAvailable[0] or showEditPopup[0]
     end,
     function()
         if updateAvailable[0] then
