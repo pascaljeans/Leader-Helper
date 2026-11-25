@@ -16,7 +16,6 @@ local updateRemoteVer    = ""
 local updateContent      = ""
 
 lastUpdateVersion = nil 
-
 encoding.default = 'CP1251'
 local u8 = encoding.UTF8
 
